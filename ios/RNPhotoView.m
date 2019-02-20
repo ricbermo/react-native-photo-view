@@ -285,7 +285,7 @@
 #pragma mark - Setter
 
 - (void)setSource:(NSDictionary *)source {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul), ^{
         if ([_source isEqualToDictionary:source]) {
             return;
         }
@@ -295,38 +295,29 @@
         }
         _source = source;
         NSURL *imageURL = [NSURL URLWithString:uri];
-        
-        if (![[uri substringToIndex:4] isEqualToString:@"http"]) {
-            @try {
-                UIImage *image = RCTImageFromLocalAssetURL(imageURL);
-                if (image) { // if local image
-                    [self setImage:image];
-                    if (_onPhotoViewerLoad) {
-                        _onPhotoViewerLoad(nil);
-                    }
-                    if (_onPhotoViewerLoadEnd) {
-                        _onPhotoViewerLoadEnd(nil);
-                    }
-                    return;
+
+        @try {
+            UIImage *image = RCTImageFromLocalAssetURL(imageURL);
+            if (image) { // if local image
+                __weak RNPhotoView *weakSelf = self;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [weakSelf setImage:image];
+                });
+                if (_onPhotoViewerLoad) {
+                    _onPhotoViewerLoad(nil);
                 }
+                if (_onPhotoViewerLoadEnd) {
+                    _onPhotoViewerLoadEnd(nil);
+                }
+                return;
             }
-            @catch (NSException *exception) {
-                NSLog(@"%@", exception.reason);
-            }
+        }
+        @catch (NSException *exception) {
+            NSLog(@"%@", exception.reason);
         }
 
+
         NSURLRequest *request = [[NSURLRequest alloc] initWithURL:imageURL];
-        
-        if (source[@"headers"]) {
-            NSMutableURLRequest *mutableRequest = [request mutableCopy];
-            
-            NSDictionary *headers = source[@"headers"];
-            NSEnumerator *enumerator = [headers keyEnumerator];
-            id key;
-            while((key = [enumerator nextObject]))
-                [mutableRequest addValue:[headers objectForKey:key] forHTTPHeaderField:key];
-            request = [mutableRequest copy];
-        }
 
         __weak RNPhotoView *weakSelf = self;
         if (_onPhotoViewerLoadStart) {
@@ -350,15 +341,11 @@
                             partialLoadBlock:nil
                              completionBlock:^(NSError *error, UIImage *image) {
                                                 if (image) {
-                                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                                    dispatch_sync(dispatch_get_main_queue(), ^{
                                                         [weakSelf setImage:image];
                                                     });
                                                     if (_onPhotoViewerLoad) {
                                                         _onPhotoViewerLoad(nil);
-                                                    }
-                                                } else {
-                                                    if (_onPhotoViewerError) {
-                                                        _onPhotoViewerError(nil);
                                                     }
                                                 }
                                                 if (_onPhotoViewerLoadEnd) {
@@ -410,10 +397,10 @@
 
 - (void)initView {
     _minZoomScale = 1.0;
-    _maxZoomScale = 5.0;
+    _maxZoomScale = 3.0;
 
     // Setup
-    self.backgroundColor = [UIColor clearColor];
+    self.backgroundColor = [UIColor blackColor];
     self.delegate = self;
     self.decelerationRate = UIScrollViewDecelerationRateFast;
     self.showsVerticalScrollIndicator = YES;
@@ -423,12 +410,12 @@
     _tapView = [[MWTapDetectingView alloc] initWithFrame:self.bounds];
     _tapView.tapDelegate = self;
     _tapView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _tapView.backgroundColor = [UIColor clearColor];
+    _tapView.backgroundColor = [UIColor blackColor];
     [self addSubview:_tapView];
 
     // Image view
     _photoImageView = [[MWTapDetectingImageView alloc] initWithFrame:self.bounds];
-    _photoImageView.backgroundColor = [UIColor clearColor];
+    _photoImageView.backgroundColor = [UIColor blackColor];
     _photoImageView.contentMode = UIViewContentModeCenter;
     _photoImageView.tapDelegate = self;
     [self addSubview:_photoImageView];
